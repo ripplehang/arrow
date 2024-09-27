@@ -77,21 +77,19 @@ std::string MinioTestServer::access_key() const { return impl_->access_key_; }
 std::string MinioTestServer::secret_key() const { return impl_->secret_key_; }
 
 std::string MinioTestServer::ca_path() const {
-  return impl_->temp_dir_ca_->path().ToString();
+  return impl_->temp_dir_->path().ToString();
 }
 
 void MinioTestServer::GenerateCertificateFile() {
   ASSERT_OK_AND_ASSIGN(auto public_crt_file,
-                       PlatformFilename::FromString(
-                           impl_->temp_dir_ca_->path().ToString() + "/public.crt"));
+                       PlatformFilename::FromString(ca_path() + "/public.crt"));
   ASSERT_OK_AND_ASSIGN(auto public_cert_fd, FileOpenWritable(public_crt_file));
   ASSERT_OK(FileWrite(public_cert_fd.fd(), reinterpret_cast<const uint8_t*>(kMinioCert),
                       strlen(kMinioCert)));
   ASSERT_OK(public_cert_fd.Close());
 
   ASSERT_OK_AND_ASSIGN(auto private_key_file,
-                       PlatformFilename::FromString(
-                           impl_->temp_dir_ca_->path().ToString() + "/private.key"));
+                       PlatformFilename::FromString(ca_path() + "/private.key"));
   ASSERT_OK_AND_ASSIGN(auto private_key_fd, FileOpenWritable(private_key_file));
   ASSERT_OK(FileWrite(private_key_fd.fd(),
                       reinterpret_cast<const uint8_t*>(kMinioPrivateKey),
