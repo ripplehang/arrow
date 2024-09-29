@@ -19,6 +19,7 @@
 #  include <sys/wait.h>
 #endif
 
+#include "arrow/filesystem/s3_test_cert.h"
 #include "arrow/filesystem/s3_test_util.h"
 #include "arrow/filesystem/s3fs.h"
 #include "arrow/testing/process.h"
@@ -31,6 +32,11 @@
 namespace arrow {
 namespace fs {
 
+using ::arrow::internal::FileClose;
+using ::arrow::internal::FileDescriptor;
+using ::arrow::internal::FileOpenWritable;
+using ::arrow::internal::FileWrite;
+using ::arrow::internal::PlatformFilename;
 using ::arrow::internal::TemporaryDir;
 
 namespace {
@@ -50,6 +56,7 @@ std::string GenerateConnectString() { return GetListenAddress(); }
 
 struct MinioTestServer::Impl {
   std::unique_ptr<TemporaryDir> temp_dir_;
+  std::unique_ptr<TemporaryDir> temp_dir_ca_;
   std::string connect_string_;
   std::string access_key_ = kMinioAccessKey;
   std::string secret_key_ = kMinioSecretKey;
@@ -68,6 +75,47 @@ std::string MinioTestServer::connect_string() const { return impl_->connect_stri
 std::string MinioTestServer::access_key() const { return impl_->access_key_; }
 
 std::string MinioTestServer::secret_key() const { return impl_->secret_key_; }
+
+std::string MinioTestServer::ca_path() const {
+  return impl_->temp_dir_ca_->path().ToString();
+}
+
+Status MinioTestServer::GenerateCertificateFile() {
+  // create the dedicated folder for certificate file, rather than reuse the data
+  // folder, since there is test case to check whether the folder is empty.
+  ARROW_ASSIGN_OR_RAISE(impl_->temp_dir_ca_, TemporaryDir::Make("s3fs-test-ca-"));
+
+  ARROW_ASSIGN_OR_RAISE(auto public_crt_file,
+                        PlatformFilename::FromString(ca_path() + "/public.crt"));
+  ARROW_ASSIGN_OR_RAISE(auto public_cert_fd, FileOpenWritable(public_crt_file));
+  ARROW_RETURN_NOT_OK(FileWrite(public_cert_fd.fd(),
+                                reinterpret_cast<const uint8_t*>(kMinioCert),
+                                strlen(kMinioCert)));
+  ARROW_RETURN_NOT_OK(public_cert_fd.Close());
+
+  ARROW_ASSIGN_OR_RAISE(auto private_key_file,
+                        PlatformFilename::FromString(ca_path() + "/private.key"));
+  ARROW_ASSIGN_OR_RAISE(auto private_key_fd, FileOpenWritable(private_key_file));
+  ARROW_RETURN_NOT_OK(FileWrite(private_key_fd.fd(),
+                                reinterpret_cast<const uint8_t*>(kMinioPrivateKey),
+                                strlen(kMinioPrivateKey)));
+  ARROW_RETURN_NOT_OK(private_key_fd.Close());
+
+  // Set the trusted CA certificate
+#if defined(__linux__)
+  arrow::fs::FileSystemGlobalOptions global_options;
+  global_options.tls_ca_dir_path = ca_path();
+  ARROW_RETURN_NOT_OK(arrow::fs::Initialize(global_options));
+#elif defined(_WIN32)
+  // Windows does not have a standard location for CA certificates
+  auto import_cert_process = std::make_unique<util::Process>();
+  ARROW_RETURN_NOT_OK(import_cert_process->SetExecutable("certutil"));
+  import_cert_process->SetArgs(
+      {"-addstore", "-f", "ArrowTest", public_crt_file.ToString()});
+  ARROW_RETURN_NOT_OK(import_cert_process->Execute());
+#endif
+  return Status::OK();
+}
 
 Status MinioTestServer::Start() {
   const char* connect_str = std::getenv(kEnvConnectString);
@@ -89,10 +137,11 @@ Status MinioTestServer::Start() {
   // Disable the embedded console (one less listening address to care about)
   impl_->server_process_->SetEnv("MINIO_BROWSER", "off");
   impl_->connect_string_ = GenerateConnectString();
+  ARROW_RETURN_NOT_OK(GenerateCertificateFile());
   ARROW_RETURN_NOT_OK(impl_->server_process_->SetExecutable(kMinioExecutableName));
   // NOTE: --quiet makes startup faster by suppressing remote version check
-  impl_->server_process_->SetArgs({"server", "--quiet", "--compat", "--address",
-                                   impl_->connect_string_,
+  impl_->server_process_->SetArgs({"server", "--quiet", "--compat", "--certs-dir",
+                                   ca_path(), "--address", impl_->connect_string_,
                                    impl_->temp_dir_->path().ToString()});
   ARROW_RETURN_NOT_OK(impl_->server_process_->Execute());
   return Status::OK();

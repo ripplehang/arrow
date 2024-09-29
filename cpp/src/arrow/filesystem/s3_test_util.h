@@ -50,7 +50,10 @@ class MinioTestServer {
 
   std::string secret_key() const;
 
+  std::string ca_path() const;
+
  private:
+  Status GenerateCertificateFile();
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };
