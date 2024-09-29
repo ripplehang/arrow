@@ -214,6 +214,7 @@ class S3TestMixin : public AwsTestMixin {
 #else
     client_config_->verifySSL = false;
 #endif
+    client_config_->verifySSL = false;
     client_config_->retryStrategy =
         std::make_shared<ConnectRetryStrategy>(kRetryInterval, kMaxRetryDuration);
     credentials_ = {ToAwsString(minio_->access_key()), ToAwsString(minio_->secret_key())};

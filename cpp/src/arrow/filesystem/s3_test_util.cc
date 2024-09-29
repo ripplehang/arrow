@@ -77,13 +77,13 @@ std::string MinioTestServer::access_key() const { return impl_->access_key_; }
 std::string MinioTestServer::secret_key() const { return impl_->secret_key_; }
 
 std::string MinioTestServer::ca_path() const {
-  return impl_->temp_dir_ca_->path().ToString();
+  return impl_->temp_dir_->path().ToString();
 }
 
 Status MinioTestServer::GenerateCertificateFile() {
   // create the dedicated folder for certificate file, rather than reuse the data
   // folder, since there is test case to check whether the folder is empty.
-  ARROW_ASSIGN_OR_RAISE(impl_->temp_dir_ca_, TemporaryDir::Make("s3fs-test-ca-"));
+  // ARROW_ASSIGN_OR_RAISE(impl_->temp_dir_ca_, TemporaryDir::Make("s3fs-test-ca-"));
 
   ARROW_ASSIGN_OR_RAISE(auto public_crt_file,
                         PlatformFilename::FromString(ca_path() + "/public.crt"));
