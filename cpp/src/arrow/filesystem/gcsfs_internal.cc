@@ -344,6 +344,9 @@ google::cloud::Options AsGoogleCloudOptions(const GcsOptions& o) {
   if (o.project_id.has_value()) {
     options.set<gcs::ProjectIdOption>(*o.project_id);
   }
+  if (!internal::global_options.tls_ca_file_path.empty()) {
+    options.set<google::cloud::CARootsFilePathOption>(internal::global_options.tls_ca_file_path);
+  }
   return options;
 }
 
