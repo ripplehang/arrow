@@ -17,6 +17,7 @@
 
 #include "arrow/filesystem/gcsfs_internal.h"
 #include "arrow/filesystem/gcsfs.h"
+#include "arrow/filesystem/util_internal.h"
 
 #include <absl/time/time.h>  // NOLINT
 #include <google/cloud/storage/client.h>
